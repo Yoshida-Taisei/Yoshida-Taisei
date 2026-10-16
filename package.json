@@ -1,0 +1,14 @@
+{
+  "name": "yoshida-taisei-profile",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "GitHub profile README with an auto-updating Premier League standings SVG.",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "generate": "node scripts/generate-standings.mjs",
+    "generate:sample": "node scripts/generate-standings.mjs --fixture scripts/fixtures/standings.sample.json"
+  }
+}

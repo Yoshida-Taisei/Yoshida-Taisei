@@ -1,0 +1,46 @@
+name: Update Premier League standings
+
+on:
+  # Off the hour on purpose: GitHub drops scheduled runs that pile up at :00.
+  schedule:
+    - cron: "17 */3 * * *"
+  workflow_dispatch:
+
+# Needed to push the regenerated SVG back to the repository.
+permissions:
+  contents: write
+
+# Never let two runs race on the same branch.
+concurrency:
+  group: update-standings
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Generate standings SVG
+        env:
+          FOOTBALL_DATA_API_TOKEN: ${{ secrets.FOOTBALL_DATA_API_TOKEN }}
+        run: node scripts/generate-standings.mjs
+
+      - name: Commit when the table actually changed
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- assets; then
+            echo "Standings unchanged. Nothing to commit."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add assets
+          git commit -m "chore: update Premier League standings"
+          git push
