@@ -11,18 +11,28 @@
  *    README picks between them with <picture> + prefers-color-scheme.
  */
 
-export const WIDTH = 1000;
+import { FLAG_H, japanFlag } from "./japan-flag.mjs";
+import {
+  BAR_W,
+  PAD_X,
+  WIDTH,
+  cardOpen,
+  createTheme,
+  crestOrDot,
+  escapeXml,
+  estimateTextWidth,
+  formatUpdatedAt,
+  seasonLabel,
+  truncate,
+} from "./svg.mjs";
 
 const TITLE_H = 56;
 const HEADER_H = 30;
 const ROW_H = 33;
 const FOOTER_H = 40;
 
-const PAD_X = 28;
 const POS_X = 42; // rank, centred
-const BAR_W = 4; // competition-zone stripe on the left edge
-const DOT_X = 74; // club colour dot, centred
-const DOT_R = 5.5;
+const DOT_X = 74; // club badge / colour dot, centred
 const NAME_X = 90;
 
 // Right edge of each numeric column.
@@ -43,53 +53,11 @@ const MAX_NAME_LENGTH = 30;
  * Competition zones. `from`/`to` are inclusive 1-based positions.
  * Order matters: the first matching zone wins.
  */
-export const ZONES = [
+const ZONES = [
   { from: 1, to: 4, label: "Champions League", colour: "cl" },
   { from: 5, to: 5, label: "Europa League", colour: "el" },
   { from: 18, to: 20, label: "Relegation", colour: "rel" },
 ];
-
-const THEMES = {
-  light: {
-    background: "#ffffff",
-    border: "#d0d7de",
-    text: "#1f2328",
-    muted: "#59636e",
-    rule: "#e4e8ed",
-    accent: "#38003c", // Premier League purple reads well on white
-    cl: "#1f6feb",
-    el: "#2da44e",
-    rel: "#cf222e",
-    fallbackDot: "#8b949e",
-  },
-  dark: {
-    background: "#161b22",
-    border: "#30363d",
-    text: "#e6edf3",
-    muted: "#8b949e",
-    rule: "#21262d",
-    accent: "#00ff85", // Premier League green reads well on near-black
-    cl: "#4493f8",
-    el: "#3fb950",
-    rel: "#f85149",
-    fallbackDot: "#8b949e",
-  },
-};
-
-export function escapeXml(value) {
-  return String(value)
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&apos;");
-}
-
-function truncate(name) {
-  const text = String(name ?? "");
-  if (text.length <= MAX_NAME_LENGTH) return text;
-  return `${text.slice(0, MAX_NAME_LENGTH - 1)}\u2026`;
-}
 
 function formatGoalDifference(value) {
   const n = Number(value) || 0;
@@ -100,19 +68,6 @@ function zoneFor(position) {
   return ZONES.find((zone) => position >= zone.from && position <= zone.to) ?? null;
 }
 
-function formatUpdatedAt(date) {
-  const iso = date.toISOString().replace("T", " ");
-  return `${iso.slice(0, 16)} UTC`;
-}
-
-function seasonLabel(season) {
-  const startDate = season?.startDate;
-  if (!startDate) return "Premier League";
-  const year = Number(String(startDate).slice(0, 4));
-  if (!Number.isFinite(year)) return "Premier League";
-  return `${year}/${String((year + 1) % 100).padStart(2, "0")}`;
-}
-
 /**
  * @param {object} input
  * @param {Array<object>} input.table      rows from standings[TOTAL].table
@@ -120,15 +75,21 @@ function seasonLabel(season) {
  * @param {string} input.theme            "light" | "dark"
  * @param {Date}   input.updatedAt
  * @param {(tla: string) => string} [input.colourForTla]
+ * @param {(team: object) => string | null} [input.crestForTeam]
+ *   Returns a `data:` URI for the club crest, or null to draw the colour dot.
+ * @param {(team: object) => boolean} [input.hasJapanesePlayer]
+ *   When true, a small Japan flag is drawn after the club name.
  */
-export function renderStandings({ table, season, theme: themeName, updatedAt, colourForTla }) {
-  const theme = THEMES[themeName];
-  if (!theme) throw new Error(`Unknown theme: ${themeName}`);
-
-  const dotColour = (tla) => {
-    if (!tla || !colourForTla) return theme.fallbackDot;
-    return colourForTla(tla) || theme.fallbackDot;
-  };
+export function renderStandings({
+  table,
+  season,
+  theme: themeName,
+  updatedAt,
+  colourForTla,
+  crestForTeam,
+  hasJapanesePlayer,
+}) {
+  const theme = createTheme(themeName, colourForTla);
 
   const height = TITLE_H + HEADER_H + table.length * ROW_H + FOOTER_H;
   const headerY = TITLE_H;
@@ -140,36 +101,13 @@ export function renderStandings({ table, season, theme: themeName, updatedAt, co
   if (matchday) subtitleParts.push(`Matchday ${matchday}`);
   subtitleParts.push(`Updated ${formatUpdatedAt(updatedAt)}`);
 
-  const out = [];
-  out.push(
-    `<svg xmlns="http://www.w3.org/2000/svg" width="${WIDTH}" height="${height}" viewBox="0 0 ${WIDTH} ${height}" role="img" aria-label="${escapeXml(
-      `Premier League ${seasonLabel(season)} standings`,
-    )}" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif">`,
-  );
-  out.push(`<title>${escapeXml(`Premier League ${seasonLabel(season)} standings`)}</title>`);
-  out.push(
-    `<defs><clipPath id="card-clip"><rect x="0.5" y="0.5" width="${WIDTH - 1}" height="${
-      height - 1
-    }" rx="12" /></clipPath></defs>`,
-  );
-  out.push(
-    `<rect x="0.5" y="0.5" width="${WIDTH - 1}" height="${height - 1}" rx="12" fill="${
-      theme.background
-    }" stroke="${theme.border}" />`,
-  );
-
-  // ---- title -------------------------------------------------------------
-  out.push(
-    `<rect x="${PAD_X}" y="24" width="${BAR_W}" height="18" rx="2" fill="${theme.accent}" />`,
-  );
-  out.push(
-    `<text x="${PAD_X + 14}" y="38" font-size="19" font-weight="700" fill="${theme.text}">Premier League</text>`,
-  );
-  out.push(
-    `<text x="${WIDTH - PAD_X}" y="38" font-size="12" fill="${theme.muted}" text-anchor="end">${escapeXml(
-      subtitleParts.join(" \u00b7 "),
-    )}</text>`,
-  );
+  const out = cardOpen({
+    theme,
+    height,
+    clipId: "card-clip",
+    ariaLabel: `Premier League ${seasonLabel(season)} standings`,
+    subtitle: subtitleParts.join(" \u00b7 "),
+  });
 
   // ---- header ------------------------------------------------------------
   out.push(
@@ -195,7 +133,6 @@ export function renderStandings({ table, season, theme: themeName, updatedAt, co
     const top = rowsTop + index * ROW_H;
     const baseline = top + 21.5;
     const zone = zoneFor(position);
-    const tla = row?.team?.tla;
 
     if (zone) {
       out.push(
@@ -215,16 +152,17 @@ export function renderStandings({ table, season, theme: themeName, updatedAt, co
         zone ? theme.text : theme.muted
       }" text-anchor="middle">${position}</text>`,
     );
-    out.push(
-      `<circle cx="${DOT_X}" cy="${top + 16.5}" r="${DOT_R}" fill="${dotColour(
-        tla,
-      )}" stroke="${theme.border}" stroke-width="1" />`,
-    );
+    out.push(crestOrDot(theme, crestForTeam, row?.team, DOT_X, top + 16.5));
+    const name = truncate(row?.team?.name ?? "Unknown", MAX_NAME_LENGTH);
     out.push(
       `<text x="${NAME_X}" y="${baseline}" font-size="14" fill="${theme.text}">${escapeXml(
-        truncate(row?.team?.name ?? "Unknown"),
+        name,
       )}</text>`,
     );
+    if (hasJapanesePlayer?.(row?.team)) {
+      const flagX = NAME_X + estimateTextWidth(name, 14) + 6;
+      out.push(japanFlag(flagX, baseline - FLAG_H + 0.5, theme.border));
+    }
 
     for (const col of COLUMNS) {
       const raw = row[col.key];

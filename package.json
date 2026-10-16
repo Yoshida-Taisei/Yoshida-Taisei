@@ -9,6 +9,9 @@
   },
   "scripts": {
     "generate": "node scripts/generate-standings.mjs",
-    "generate:sample": "node scripts/generate-standings.mjs --fixture scripts/fixtures/standings.sample.json"
+    "generate:sample": "node scripts/generate-standings.mjs --fixture scripts/fixtures/standings.sample.json",
+    "generate:fixtures": "node scripts/generate-fixtures.mjs",
+    "generate:fixtures:sample": "node scripts/generate-fixtures.mjs --fixture scripts/fixtures/matches.sample.json",
+    "fetch-crests": "node scripts/fetch-crests.mjs"
   }
 }

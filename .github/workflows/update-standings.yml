@@ -1,9 +1,9 @@
-name: Update Premier League standings
+name: Update Premier League standings and fixtures
 
 on:
-  # Off the hour on purpose: GitHub drops scheduled runs that pile up at :00.
+  # 09:00 JST daily (GitHub cron runs in UTC).
   schedule:
-    - cron: "17 */3 * * *"
+    - cron: "0 1 * * *"
   workflow_dispatch:
 
 # Needed to push the regenerated SVG back to the repository.
@@ -32,15 +32,20 @@ jobs:
           FOOTBALL_DATA_API_TOKEN: ${{ secrets.FOOTBALL_DATA_API_TOKEN }}
         run: node scripts/generate-standings.mjs
 
+      - name: Generate fixtures SVG
+        env:
+          FOOTBALL_DATA_API_TOKEN: ${{ secrets.FOOTBALL_DATA_API_TOKEN }}
+        run: node scripts/generate-fixtures.mjs
+
       - name: Commit when the table actually changed
         run: |
           set -euo pipefail
           if git diff --quiet -- assets; then
-            echo "Standings unchanged. Nothing to commit."
+            echo "Assets unchanged. Nothing to commit."
             exit 0
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add assets
-          git commit -m "chore: update Premier League standings"
+          git commit -m "chore: update Premier League assets"
           git push
