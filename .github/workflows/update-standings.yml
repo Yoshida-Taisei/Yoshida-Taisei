@@ -1,9 +1,12 @@
 name: Update Premier League standings and fixtures
 
 on:
-  # 09:00 JST daily (GitHub cron runs in UTC).
+  # GitHub cron runs in UTC and usually starts ~3h late on this repo.
+  # PL matches end by ~06:00 JST; the evening run picks up Saturday's early
+  # kick-off and results football-data.org published late.
   schedule:
-    - cron: "0 0 * * *"
+    - cron: "13 21 * * *" # 06:13 JST
+    - cron: "13 12 * * *" # 21:13 JST
   workflow_dispatch:
 
 # Needed to push the regenerated SVG back to the repository.
